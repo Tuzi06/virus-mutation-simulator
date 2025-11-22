@@ -4,16 +4,29 @@ import random,time,copy
 import pandas as pd
 
 new_caught_rate = 0.01
-old_caught_rate = 0.1
+# old_caught_rate = 0.1
 
-def worker(virusPool,antigens,mutations,nutritions,white_cell,orginal_virus,started):
+
+def worker(virusPool,antigens,mutations,nutritions,white_cell,orginal_virus,started,drug,old_caught):
     i = 0
-    while i < 10000:
+    # while i < 10000:
+    while True:
         if virusPool.empty():
             if started.value == False:
                 started.value = True
                 virusPool.put(copy.deepcopy(orginal_virus))
             continue
+        old_caught_rate = old_caught.value
+
+        if drug.value == True:
+            # print(f'after have drug, current cuaght_rate is {old_caught.value}')
+            old_caught.value -= 0.002
+            if old_caught.value <=0.1:
+                drug.value = False
+        elif virusPool.qsize()>50000 and drug.value == False:
+            old_caught.value = 0.8
+            drug.value = True
+        
         virus = virusPool.get()
         if random.random() < 0.5:
             virus['nutrition_take'] -= 1
@@ -21,15 +34,15 @@ def worker(virusPool,antigens,mutations,nutritions,white_cell,orginal_virus,star
             virusPool.put(virus)
             continue
 
-        for _ in range(20):
+        for _ in range(40):
             if nutritions.value < 2:
                 continue
 
-            new_sequence = ''.join([s if random.choices(mutations,weights = [0.1,0.1,0.1,0.1,0.6],k=1)[0] == None else random.choice(mutations[:-1]) for s in list(virus['sequence'])])
+            new_sequence = ''.join([s if random.choices(mutations,weights = [0.2,0.3,0.2,0.2,0.1],k=1)[0] == None else random.choice(mutations[:-1]) for s in list(virus['sequence'])])
 
             survive_chance = random.random()
            
-            if new_sequence not in antigens and survive_chance <new_caught_rate:
+            if new_sequence not in antigens and survive_chance < new_caught_rate:
                 if white_cell.value >5:
                     white_cell.value -=1
                     antigens.append(new_sequence)
@@ -60,22 +73,23 @@ def worker(virusPool,antigens,mutations,nutritions,white_cell,orginal_virus,star
 def main():
     virusPool = Manager().Queue()
     antigens = Manager().list()
-    orginal_virus =  {'sequence':"aabbcdd",'nutrition_take':20}
+    orginal_virus =  {'sequence':"aaaaaaaaaaaaaaaaaaaaaaaaaaa",'nutrition_take':20}
     mutations = ['a','b','c','d',None]
     nutritions = Value('i',100000)
-    white_cell = Value('i',50)
+    white_cell = Value('i',100)
     started = Value('b',False)
+    drug = Value('b',False)
+    old_caught_rate = Value('f',0.1)
 
     pool = []
     for _ in range(100):
-        p = Process(target=worker, args=(virusPool,antigens,mutations,nutritions,white_cell,orginal_virus,started))
+        p = Process(target=worker, args=(virusPool,antigens,mutations,nutritions,white_cell,orginal_virus,started,drug,old_caught_rate))
         time.sleep(0)
         p.start()
         pool.append(p)
 
     for p in pool:
         p.join()
-
 
     survived_virus = []
     while not virusPool.empty():
